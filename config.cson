@@ -1,0 +1,48 @@
+"*":
+  "command-executor":
+    "pane-item-position": "down"
+  core:
+    disabledPackages: [
+      "terminal-panel"
+    ]
+    themes: [
+      "one-light-ui"
+      "base16-tomorrow-dark-theme"
+    ]
+  editor:
+    fontSize: 16
+    invisibles: {}
+    softWrap: true
+    softWrapHangingIndent: 1
+    tabLength: 4
+  "exception-reporting":
+    userId: "76224680-6b80-4465-1ef9-77cf1d775418"
+  latex: {}
+  latexer: {}
+  "one-dark-ui": {}
+  "open-terminal-here": {}
+  "run-command2": {}
+  "terminal-panel": {}
+  welcome:
+    showOnStartup: false
+".bat.source":
+  editor:
+    softWrapHangingIndent: 1
+".beamer.latex.tex.text":
+  editor:
+    softWrapHangingIndent: 1
+".bibtex.text":
+  editor:
+    softWrapHangingIndent: 1
+".latex.log.text":
+  editor:
+    softWrapHangingIndent: 1
+".latex.memoir.tex.text":
+  editor:
+    softWrapHangingIndent: 1
+".latex.tex.text":
+  editor:
+    softWrapHangingIndent: 1
+".tex.text":
+  editor:
+    softWrapHangingIndent: 1
