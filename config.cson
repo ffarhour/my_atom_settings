@@ -1,4 +1,10 @@
 "*":
+  "atom-beautify":
+    general:
+      _analyticsUserId: "a97abbfc-6ff2-4455-8d78-798944b5ce25"
+  "bracket-matcher":
+    autocompleteBrackets: false
+    autocompleteSmartQuotes: false
   "command-executor":
     "pane-item-position": "down"
   core:
@@ -10,7 +16,7 @@
       "base16-tomorrow-dark-theme"
     ]
   editor:
-    fontSize: 16
+    fontSize: 17
     invisibles: {}
     softWrap: true
     softWrapHangingIndent: 1
