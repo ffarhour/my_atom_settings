@@ -2,9 +2,82 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.37.1] / 2016-10-07
+### Fixed
+- Output extension matching in log parser. Fixes [#245](https://github.com/thomasjo/atom-latex/issues/245).
+
+## [0.37.0] / 2016-10-05
+### Added
+- Deprecation notice for `texify`.
+- Evince viewer support including SyncTeX forward/backward and open in background.
+- `xdg-open` viewer support.
+- Non-PDF producing LaTeX engine support.
+- Allow PDF producer override via magic comments.
+- Allow output format override via magic comments.
+- Rebuild command including automatic rebuild on change in settings.
+- Message panel with synchronization to source and log files.
+
+## [0.36.1] / 2016-09-20
+### Fixed
+- Open LaTeX log from error indicator
+
+## [0.36.0] / 2016-09-14
+### Added
+- Allow builder override via magic comments.
+- Basic knitr builder functionality.
+  Note that at this point it only works with `.Rnw` files. This limitation will
+  be addressed in a future release.
+
+### Changed
+- Improved log parsing and error reporting.
+
+### Fixed
+- Use escaped double quotes in keymaps. Fixes [#187](https://github.com/thomasjo/atom-latex/issues/187).
+- Assign `outputFilePath` in `resolveOutputFilePath`.
+- Add default environment for texify. Fixes [#185](https://github.com/thomasjo/atom-latex/issues/185).
+
+## [0.35.1] / 2016-08-30
+### Fixed
+- Add support for TeX Live 2016 on Windows.
+
+## [0.35.0] / 2016-08-10
+### Added
+- Grammar activation hooks for
+  [language-tex](https://atom.io/packages/language-tex) and
+  [language-latexsimple](https://atom.io/packages/language-latexsimple).
+
+## [0.34.1] / 2016-08-02
+### Fixed
+- Add missing `getBuilder` argument. Fixes [#197](https://github.com/thomasjo/atom-latex/issues/197).
+
+## [0.34.0] / 2016-07-31
+### Added
+- Support the concept of "build jobs" via `jobnames` magic comment.
+
+### Changed
+- Magic comments can be denoted by both `TEX` and `TeX`.  
+    ~ [#191](https://github.com/thomasjo/atom-latex/pull/191)
+    / [@yagop](https://github.com/yagop)
+
+### Fixed
+- Update invalid `getBuilder` reference.
+
+## [0.33.1] / 2016-07-04
+### Changed
+- Renamed OS X to macOS.
+
+### Fixed
+- Bug caused by API changes in Etch v0.6.0.
+
+## [0.33.0] / 2016-06-10
+### Added
+- SyncTeX support can be toggled via configuration.  
+    ~ [#183](https://github.com/thomasjo/atom-latex/pull/183)
+    / [@alexandrecormier](https://github.com/alexandrecormier)
+
 ## [0.32.0] / 2016-03-12
 ### Added
-- The SumatraPDF opener now has full sync support.
+- The SumatraPDF opener now has full sync support.  
     ~ [#163](https://github.com/thomasjo/atom-latex/pull/163)
     / [@avonmoll](https://github.com/avonmoll)
 
@@ -15,19 +88,19 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.31.0] / 2016-03-12
 ### Added
-- Optional functionality for automatically building a file after is has been
+- Optional functionality for automatically building a file after it has been
   saved. To avoid possible race conditions that could potentially be triggered
-  by *Save All*, automatic builds are only triggered on the active file.
+  by *Save All*, automatic builds are only triggered on the active file.  
     ~ [#152](https://github.com/thomasjo/atom-latex/pull/152)
     / [@ravinrabbid](https://github.com/ravinrabbid)
 
 ## [0.30.0] / 2016-03-02
 ### Added
 - After a LaTeX file has been built it gets decorated with line number markers
-  to indicate which lines contain errors and warnings.
+  to indicate which lines contain errors and warnings.  
     ~ [#167](https://github.com/thomasjo/atom-latex/pull/167)
     / [@Focus](https://github.com/Focus)
-- The pdf-view opener now supports forward-sync.
+- The pdf-view opener now supports forward-sync.  
     ~ [#170](https://github.com/thomasjo/atom-latex/pull/170)
     / [@nsaje](https://github.com/nsaje)
 
@@ -36,7 +109,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   option ordering, etc.
 
 ### Fixed
-- Bug related to undefined `editor.getPath()` for new editor instances.
+- Bug related to undefined `editor.getPath()` for new editor instances.  
     ~ [#167](https://github.com/thomasjo/atom-latex/pull/167)
     / [@Focus](https://github.com/Focus)
 
@@ -101,7 +174,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.25.1] / 2015-08-21
 ### Added
-- Additional default (platform dependent) TeX paths;  
+- Additional default (platform dependent) TeX paths;
     `%SystemDrive%\\texlive\\2015\\bin\\win32`
     `/Library/TeX/texbin`
 
@@ -152,11 +225,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.23.4] / 2015-05-12
 ### Fixed
-- Ensure `Composer::shouldMoveResult` behaves as expected.  
+- Ensure `Composer::shouldMoveResult` behaves as expected.
   Fixes [#80](https://github.com/thomasjo/atom-latex/issues/80).
 
 ## [0.23.3] / 2015-05-11
-- Bug caused by breaking change in fs-plus.  
+- Bug caused by breaking change in fs-plus.
   Fixes [#78](https://github.com/thomasjo/atom-latex/issues/78).
 
 ## [0.23.2] / 2015-05-07
@@ -165,7 +238,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.23.1] / 2015-05-07
 ### Fixed
-- Launch SumatraPDF with `execFile` instead of `exec`.  
+- Launch SumatraPDF with `execFile` instead of `exec`.
   Fixes [#77](https://github.com/thomasjo/atom-latex/issues/77).
 
 ## [0.23.0] / 2015-05-07
@@ -178,7 +251,7 @@ minor release.
 
 ## [0.22.0] / 2015-04-21
 ### Fixed
-- `Composer:getEditorDetails` now always returns an object.  
+- `Composer:getEditorDetails` now always returns an object.
   Fixes [#74](https://github.com/thomasjo/atom-latex/issues/74).
 
 ## [0.21.0] / 2015-04-06
@@ -205,7 +278,7 @@ minor release.
   Substitutions are still supported, but the new default is to not use it,
   and when it's not present, the inherited `PATH` environment variable is
   appended to the configured TeX path instead.
-- Default *SumatraPDF* path changed to  
+- Default *SumatraPDF* path changed to
   `C:\Program Files (x86)\SumatraPDF\SumatraPDF.exe`.
 
 ### Fixed
@@ -233,7 +306,7 @@ minor release.
 
 ## [0.18.1] / 2015-02-09
 ### Fixed
-- Resolved `NullReferenceException` bug.  
+- Resolved `NullReferenceException` bug.
   Fixes [#53](https://github.com/thomasjo/atom-latex/issues/53).
 
 ## [0.18.0] / 2015-02-06
@@ -283,7 +356,7 @@ minor release.
 
 ## [0.15.1] / 2015-01-20
 ### Fixed
-- Bug related to paths containing spaces.  
+- Bug related to paths containing spaces.
   Fixes [#42](https://github.com/thomasjo/atom-latex/issues/42).
 
 ## [0.15.0] / 2015-01-19
@@ -330,7 +403,7 @@ minor release.
   configurable.  
     ~ [#24](https://github.com/thomasjo/atom-latex/pull/24)
     / [@boborbt](https://github.com/boborbt)
-- Added a basic Skim.app opener.  
+- Added a basic Skim.app opener.
   Used by default if Skim.app exists at the configured path which defaults to
   `/Applications/Skim.app`.
 
@@ -358,7 +431,7 @@ minor release.
 
 ## [0.8.0] / 2014-05-09
 ### Fixed
-- Issues due to filenames containing spaces.  
+- Issues due to filenames containing spaces.
   For reference see
     [#5](https://github.com/thomasjo/atom-latex/issues/5) and
     [#7](https://github.com/thomasjo/atom-latex/issues/7).
@@ -407,7 +480,16 @@ minor release.
 - First release.
 
 <!--- refs --->
-[Unreleased]: https://github.com/thomasjo/atom-latex/compare/v0.32.0...HEAD
+[0.37.1]: https://github.com/thomasjo/atom-latex/compare/v0.37.0...v0.37.1
+[0.37.0]: https://github.com/thomasjo/atom-latex/compare/v0.36.1...v0.37.0
+[0.36.1]: https://github.com/thomasjo/atom-latex/compare/v0.36.0...v0.36.1
+[0.36.0]: https://github.com/thomasjo/atom-latex/compare/v0.35.1...v0.36.0
+[0.35.1]: https://github.com/thomasjo/atom-latex/compare/v0.35.0...v0.35.1
+[0.35.0]: https://github.com/thomasjo/atom-latex/compare/v0.34.1...v0.35.0
+[0.34.1]: https://github.com/thomasjo/atom-latex/compare/v0.34.0...v0.34.1
+[0.34.0]: https://github.com/thomasjo/atom-latex/compare/v0.33.1...v0.34.0
+[0.33.1]: https://github.com/thomasjo/atom-latex/compare/v0.33.0...v0.33.1
+[0.33.0]: https://github.com/thomasjo/atom-latex/compare/v0.32.0...v0.33.0
 [0.32.0]: https://github.com/thomasjo/atom-latex/compare/v0.31.0...v0.32.0
 [0.31.0]: https://github.com/thomasjo/atom-latex/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/thomasjo/atom-latex/compare/v0.29.0...v0.30.0

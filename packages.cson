@@ -1,0 +1,17 @@
+packages: [
+  "activate-power-mode"
+  "atom-beautify"
+  "autocomplete-java"
+  "copy-as-rtf"
+  "language-assembly"
+  "language-batch"
+  "language-latex"
+  "language-mips"
+  "latex"
+  "latexer"
+  "open-terminal-here"
+  "package-sync"
+  "pigments"
+  "run-command2"
+  "terminal-panel"
+]

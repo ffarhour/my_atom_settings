@@ -1,30 +1,33 @@
-'use babel'
+/** @babel */
 
-import helpers from './spec-helpers'
+import './spec-bootstrap'
 import fs from 'fs-plus'
 import _ from 'lodash'
 import path from 'path'
 import Composer from '../lib/composer'
+import werkzeug from '../lib/werkzeug'
 
 describe('Composer', () => {
   let composer
 
   beforeEach(() => {
+    atom.config.set('latex.builder', 'latexmk')
     composer = new Composer()
   })
 
   describe('build', () => {
     let editor, builder
 
-    function initializeSpies (filePath, statusCode = 0) {
+    function initializeSpies (filePath, jobnames = [null], statusCode = 0) {
       editor = jasmine.createSpyObj('MockEditor', ['save', 'isModified'])
       spyOn(composer, 'resolveRootFilePath').andReturn(filePath)
-      spyOn(composer, 'getEditorDetails').andReturn({
+      spyOn(werkzeug, 'getEditorDetails').andReturn({
         editor: editor,
         filePath: filePath
       })
 
-      builder = jasmine.createSpyObj('MockBuilder', ['run', 'constructArgs', 'parseLogFile'])
+      builder = jasmine.createSpyObj('MockBuilder', ['run', 'constructArgs', 'parseLogAndFdbFiles', 'getJobNamesFromMagic'])
+      builder.getJobNamesFromMagic.andReturn(jobnames)
       builder.run.andCallFake(() => {
         switch (statusCode) {
           case 0: { return Promise.resolve(statusCode) }
@@ -32,7 +35,7 @@ describe('Composer', () => {
 
         return Promise.reject(statusCode)
       })
-      spyOn(latex, 'getBuilder').andReturn(builder)
+      spyOn(composer, 'getBuilder').andReturn(builder)
     }
 
     beforeEach(() => {
@@ -45,7 +48,7 @@ describe('Composer', () => {
 
       let result = 'aaaaaaaaaaaa'
       waitsForPromise(() => {
-        return composer.build().catch(r => result = r)
+        return composer.build().catch(r => { result = r })
       })
 
       runs(() => {
@@ -57,10 +60,11 @@ describe('Composer', () => {
 
     it('does nothing for unsupported file extensions', () => {
       initializeSpies('foo.bar')
+      composer.getBuilder.andReturn(null)
 
       let result
       waitsForPromise(() => {
-        return composer.build().catch(r => result = r)
+        return composer.build().catch(r => { result = r })
       })
 
       runs(() => {
@@ -74,10 +78,9 @@ describe('Composer', () => {
       initializeSpies('file.tex')
       editor.isModified.andReturn(true)
 
-      builder.parseLogFile.andReturn({
+      builder.parseLogAndFdbFiles.andReturn({
         outputFilePath: 'file.pdf',
-        errors: [],
-        warnings: []
+        messages: []
       })
 
       waitsForPromise(() => {
@@ -90,15 +93,31 @@ describe('Composer', () => {
       })
     })
 
+    it('runs the build two times with multiple job names', () => {
+      initializeSpies('file.tex', ['foo', 'bar'])
+
+      builder.parseLogAndFdbFiles.andReturn({
+        outputFilePath: 'file.pdf',
+        messages: []
+      })
+
+      waitsForPromise(() => {
+        return composer.build()
+      })
+
+      runs(() => {
+        expect(builder.run.callCount).toBe(2)
+      })
+    })
+
     it('invokes `showResult` after a successful build, with expected log parsing result', () => {
       const result = {
         outputFilePath: 'file.pdf',
-        errors: [],
-        warnings: []
+        messages: []
       }
 
       initializeSpies('file.tex')
-      builder.parseLogFile.andReturn(result)
+      builder.parseLogAndFdbFiles.andReturn(result)
 
       waitsForPromise(() => {
         return composer.build()
@@ -112,10 +131,9 @@ describe('Composer', () => {
     it('treats missing output file data in log file as an error', () => {
       initializeSpies('file.tex')
 
-      builder.parseLogFile.andReturn({
+      builder.parseLogAndFdbFiles.andReturn({
         outputFilePath: null,
-        errors: [],
-        warnings: []
+        messages: []
       })
 
       waitsForPromise(() => {
@@ -129,7 +147,7 @@ describe('Composer', () => {
 
     it('treats missing result from parser as an error', () => {
       initializeSpies('file.tex')
-      builder.parseLogFile.andReturn(null)
+      builder.parseLogAndFdbFiles.andReturn(null)
 
       waitsForPromise(() => {
         return composer.build().catch(r => r)
@@ -142,14 +160,14 @@ describe('Composer', () => {
 
     it('handles active item not being a text editor', () => {
       spyOn(atom.workspace, 'getActiveTextEditor').andReturn()
-      spyOn(composer, 'getEditorDetails').andCallThrough()
+      spyOn(werkzeug, 'getEditorDetails').andCallThrough()
 
       waitsForPromise(() => {
         return composer.build().catch(r => r)
       })
 
       runs(() => {
-        expect(composer.getEditorDetails).toHaveBeenCalled()
+        expect(werkzeug.getEditorDetails).toHaveBeenCalled()
       })
     })
   })
@@ -163,13 +181,13 @@ describe('Composer', () => {
     }
 
     function initializeSpies (filePath) {
-      spyOn(composer, 'getEditorDetails').andReturn({filePath})
+      spyOn(werkzeug, 'getEditorDetails').andReturn({filePath})
       spyOn(composer, 'resolveRootFilePath').andReturn(filePath)
     }
 
     beforeEach(() => {
       spyOn(fs, 'remove').andCallThrough()
-      helpers.spyOnConfig('latex.cleanExtensions', extensions)
+      atom.config.set('latex.cleanExtensions', extensions)
     })
 
     it('deletes all files for the current tex document when output has not been redirected', () => {
@@ -180,7 +198,7 @@ describe('Composer', () => {
       let candidatePaths
       waitsForPromise(() => {
         return composer.clean().then(resolutions => {
-          candidatePaths = _.pluck(resolutions, 'filePath')
+          candidatePaths = _.map(resolutions, 'filePath')
         })
       })
 
@@ -206,31 +224,51 @@ describe('Composer', () => {
 
   describe('shouldMoveResult', () => {
     it('should return false when using neither an output directory, nor the move option', () => {
-      helpers.spyOnConfig('latex.outputDirectory', '')
-      helpers.spyOnConfig('latex.moveResultToSourceDirectory', false)
+      atom.config.set('latex.outputDirectory', '')
+      atom.config.set('latex.moveResultToSourceDirectory', false)
 
       expect(composer.shouldMoveResult()).toBe(false)
     })
 
     it('should return false when not using an output directory, but using the move option', () => {
-      helpers.spyOnConfig('latex.outputDirectory', '')
-      helpers.spyOnConfig('latex.moveResultToSourceDirectory', true)
+      atom.config.set('latex.outputDirectory', '')
+      atom.config.set('latex.moveResultToSourceDirectory', true)
 
       expect(composer.shouldMoveResult()).toBe(false)
     })
 
     it('should return false when not using the move option, but using an output directory', () => {
-      helpers.spyOnConfig('latex.outputDirectory', 'baz')
-      helpers.spyOnConfig('latex.moveResultToSourceDirectory', false)
+      atom.config.set('latex.outputDirectory', 'baz')
+      atom.config.set('latex.moveResultToSourceDirectory', false)
 
       expect(composer.shouldMoveResult()).toBe(false)
     })
 
     it('should return true when using both an output directory and the move option', () => {
-      helpers.spyOnConfig('latex.outputDirectory', 'baz')
-      helpers.spyOnConfig('latex.moveResultToSourceDirectory', true)
+      atom.config.set('latex.outputDirectory', 'baz')
+      atom.config.set('latex.moveResultToSourceDirectory', true)
 
       expect(composer.shouldMoveResult()).toBe(true)
+    })
+  })
+
+  describe('getBuilder', () => {
+    beforeEach(() => {
+      atom.config.set('latex.builder', 'latexmk')
+    })
+
+    it('returns a builder instance as configured for regular .tex files', () => {
+      const filePath = 'foo.tex'
+
+      expect(composer.getBuilder(filePath).constructor.name).toEqual('LatexmkBuilder')
+
+      atom.config.set('latex.builder', 'texify')
+      expect(composer.getBuilder(filePath).constructor.name).toEqual('TexifyBuilder')
+    })
+
+    it('returns null when passed an unhandled file type', () => {
+      const filePath = 'quux.txt'
+      expect(composer.getBuilder(filePath)).toBeNull()
     })
   })
 })

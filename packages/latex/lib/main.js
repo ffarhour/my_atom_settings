@@ -1,6 +1,6 @@
-'use babel'
+/** @babel */
 
-import {CompositeDisposable} from 'atom'
+import { CompositeDisposable, Disposable } from 'atom'
 
 export default {
   activate () {
@@ -8,9 +8,13 @@ export default {
     this.disposables = new CompositeDisposable()
 
     this.disposables.add(atom.commands.add('atom-workspace', {
-      'latex:build': () => this.composer.build(),
+      'latex:build': () => this.composer.build(false),
+      'latex:rebuild': () => this.composer.build(true),
       'latex:clean': () => this.composer.clean(),
-      'latex:sync': () => this.composer.sync()
+      'latex:sync': () => this.composer.sync(),
+      'latex:sync-log': () => latex.log.sync(),
+      'core:close': () => latex.log.hide(),
+      'core:cancel': () => latex.log.hide()
     }))
 
     this.disposables.add(atom.workspace.observeTextEditors(editor => {
@@ -42,7 +46,10 @@ export default {
 
   consumeStatusBar (statusBar) {
     this.bootstrap()
-    this.composer.setStatusBar(statusBar)
+    latex.attachStatusBar(statusBar)
+    return new Disposable(() => {
+      latex.detachStatusBar()
+    })
   },
 
   bootstrap () {

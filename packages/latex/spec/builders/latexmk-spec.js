@@ -1,8 +1,9 @@
-'use babel'
+/** @babel */
 
 import helpers from '../spec-helpers'
 import path from 'path'
 import LatexmkBuilder from '../../lib/builders/latexmk'
+import _ from 'lodash'
 
 describe('LatexmkBuilder', () => {
   let builder, fixturesPath, filePath
@@ -11,6 +12,8 @@ describe('LatexmkBuilder', () => {
     builder = new LatexmkBuilder()
     fixturesPath = helpers.cloneFixtures()
     filePath = path.join(fixturesPath, 'file.tex')
+    atom.config.set('latex.engine', 'pdflatex')
+    atom.config.set('latex.outputFormat', 'pdf')
   })
 
   describe('constructArgs', () => {
@@ -19,9 +22,10 @@ describe('LatexmkBuilder', () => {
         '-interaction=nonstopmode',
         '-f',
         '-cd',
-        '-pdf',
-        '-synctex=1',
         '-file-line-error',
+        '-synctex=1',
+        '-pdflatex="pdflatex"',
+        '-pdf',
         `"${filePath}"`
       ]
       const args = builder.constructArgs(filePath)
@@ -29,45 +33,90 @@ describe('LatexmkBuilder', () => {
       expect(args).toEqual(expectedArgs)
     })
 
+    it('adds -g flag when rebuild is passed', () => {
+      expect(builder.constructArgs(filePath, null, true)).toContain('-g')
+    })
+
     it('adds -shell-escape flag when package config value is set', () => {
-      helpers.spyOnConfig('latex.enableShellEscape', true)
+      atom.config.set('latex.enableShellEscape', true)
       expect(builder.constructArgs(filePath)).toContain('-shell-escape')
+    })
+
+    it('disables synctex according to package config', () => {
+      atom.config.set('latex.enableSynctex', false)
+      expect(builder.constructArgs(filePath)).not.toContain('-synctex=1')
     })
 
     it('adds -outdir=<path> argument according to package config', () => {
       const outdir = 'bar'
       const expectedArg = `-outdir="${path.join(fixturesPath, outdir)}"`
-      helpers.spyOnConfig('latex.outputDirectory', outdir)
+      atom.config.set('latex.outputDirectory', outdir)
 
       expect(builder.constructArgs(filePath)).toContain(expectedArg)
     })
 
-    it('adds engine argument according to package config', () => {
-      helpers.spyOnConfig('latex.engine', 'lualatex')
-      expect(builder.constructArgs(filePath)).toContain('-lualatex')
+    it('adds pdflatex arguments according to package config', () => {
+      atom.config.set('latex.engine', 'lualatex')
+      expect(builder.constructArgs(filePath)).toContain('-pdflatex="lualatex"')
     })
 
     it('adds a custom engine string according to package config', () => {
-      helpers.spyOnConfig('latex.customEngine', 'pdflatex %O %S')
+      atom.config.set('latex.customEngine', 'pdflatex %O %S')
       expect(builder.constructArgs(filePath)).toContain('-pdflatex="pdflatex %O %S"')
     })
 
-    it('adds -ps or -dvi and removes -pdf arguments according to package config', () => {
-      helpers.spyOnConfig('latex.outputFormat', 'ps')
-      expect(builder.constructArgs(filePath)).toContain('-ps')
-      expect(builder.constructArgs(filePath)).not.toContain('-pdf')
-      helpers.spyOnConfig('latex.outputFormat', 'dvi')
-      expect(builder.constructArgs(filePath)).toContain('-dvi')
-      expect(builder.constructArgs(filePath)).not.toContain('-pdf')
+    it('adds -ps and removes -pdf arguments according to package config', () => {
+      atom.config.set('latex.outputFormat', 'ps')
+      const args = builder.constructArgs(filePath)
+      expect(args).toContain('-ps')
+      expect(args).not.toContain('-pdf')
+    })
+
+    it('adds -dvi and removes -pdf arguments according to package config', () => {
+      atom.config.set('latex.outputFormat', 'dvi')
+      const args = builder.constructArgs(filePath)
+      expect(args).toContain('-dvi')
+      expect(args).not.toContain('-pdf')
+    })
+
+    it('adds latex dvipdfmx arguments according to package config', () => {
+      atom.config.set('latex.engine', 'uplatex')
+      atom.config.set('latex.producer', 'dvipdfmx')
+      const args = builder.constructArgs(filePath)
+      expect(args).toContain('-latex="uplatex"')
+      expect(args).toContain('-pdfdvi -e "\\$dvipdf = \'dvipdfmx %O -o %D %S\';"')
+      expect(args).not.toContain('-pdf')
+    })
+
+    it('adds latex dvipdf arguments according to package config', () => {
+      atom.config.set('latex.engine', 'uplatex')
+      atom.config.set('latex.producer', 'dvipdf')
+      const args = builder.constructArgs(filePath)
+      expect(args).toContain('-latex="uplatex"')
+      expect(args).toContain('-pdfdvi -e "\\$dvipdf = \'dvipdf %O %S %D\';"')
+      expect(args).not.toContain('-pdf')
+    })
+
+    it('adds latex ps arguments according to package config', () => {
+      atom.config.set('latex.engine', 'uplatex')
+      atom.config.set('latex.producer', 'ps2pdf')
+      const args = builder.constructArgs(filePath)
+      expect(args).toContain('-latex="uplatex"')
+      expect(args).toContain('-pdfps')
+      expect(args).not.toContain('-pdf')
+    })
+
+    it('adds a jobname argument when passed a non-null jobname', () => {
+      expect(builder.constructArgs(filePath, 'foo')).toContain('-jobname=foo')
     })
   })
 
   describe('run', () => {
-    let exitCode
+    let exitCode, parsedLog
 
     it('successfully executes latexmk when given a valid TeX file', () => {
       waitsForPromise(() => {
-        return builder.run(filePath).then(code => exitCode = code)
+        return builder.run(filePath).then(code => { exitCode = code })
       })
 
       runs(() => {
@@ -79,7 +128,7 @@ describe('LatexmkBuilder', () => {
       filePath = path.join(fixturesPath, 'filename with spaces.tex')
 
       waitsForPromise(() => {
-        return builder.run(filePath).then(code => exitCode = code)
+        return builder.run(filePath).then(code => { exitCode = code })
       })
 
       runs(() => {
@@ -87,11 +136,53 @@ describe('LatexmkBuilder', () => {
       })
     })
 
+    it('fails with code 12 and various errors, warnings and info messages are produced in log file', () => {
+      filePath = path.join(fixturesPath, 'error-warning.tex')
+
+      waitsForPromise(() => {
+        return builder.run(filePath).then(code => {
+          exitCode = code
+          parsedLog = builder.parseLogFile(filePath)
+        })
+      })
+
+      runs(() => {
+        const messages = [
+          { type: 'Error', text: 'There\'s no line here to end' },
+          { type: 'Error', text: 'Argument of \\@sect has an extra }' },
+          { type: 'Error', text: 'Paragraph ended before \\@sect was complete' },
+          { type: 'Error', text: 'Extra alignment tab has been changed to \\cr' },
+          { type: 'Warning', text: 'Reference `tab:snafu\' on page 1 undefined' },
+          { type: 'Error', text: 'Class foo: Significant class issue' },
+          { type: 'Warning', text: 'Class foo: Class issue' },
+          { type: 'Warning', text: 'Class foo: Nebulous class issue' },
+          { type: 'Info', text: 'Class foo: Insignificant class issue' },
+          { type: 'Error', text: 'Package bar: Significant package issue' },
+          { type: 'Warning', text: 'Package bar: Package issue' },
+          { type: 'Warning', text: 'Package bar: Nebulous package issue' },
+          { type: 'Info', text: 'Package bar: Insignificant package issue' },
+          { type: 'Warning', text: 'There were undefined references' }
+        ]
+
+        // Loop through the required messages and make sure that each one appears
+        // in the parsed log output. We do not do a direct one-to-one comparison
+        // since there will likely be font messages which may be dependent on
+        // which TeX distribution is being used or which fonts are currently
+        // installed.
+        for (const message of messages) {
+          expect(_.some(parsedLog.messages,
+            logMessage => message.type === logMessage.type && message.text === logMessage.text)).toBe(true, `Message = ${message.text}`)
+        }
+
+        expect(exitCode).toBe(12)
+      })
+    })
+
     it('fails to execute latexmk when given invalid arguments', () => {
       spyOn(builder, 'constructArgs').andReturn(['-invalid-argument'])
 
       waitsForPromise(() => {
-        return builder.run(filePath).then(code => exitCode = code)
+        return builder.run(filePath).then(code => { exitCode = code })
       })
 
       runs(() => {
@@ -110,7 +201,7 @@ describe('LatexmkBuilder', () => {
       spyOn(builder, 'constructArgs').andReturn(args)
 
       waitsForPromise(() => {
-        return builder.run(filePath).then(code => exitCode = code)
+        return builder.run(filePath).then(code => { exitCode = code })
       })
 
       runs(() => {

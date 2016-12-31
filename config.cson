@@ -1,5 +1,9 @@
 "*":
+  "activate-power-mode":
+    autoToggle: false
   "atom-beautify":
+    c:
+      default_beautifier: "clang-format"
     general:
       _analyticsUserId: "a97abbfc-6ff2-4455-8d78-798944b5ce25"
   "bracket-matcher":
@@ -10,13 +14,16 @@
   core:
     disabledPackages: [
       "terminal-panel"
+      "language-assembly"
+      "autocomplete-java"
     ]
+    telemetryConsent: "limited"
     themes: [
       "one-light-ui"
       "base16-tomorrow-dark-theme"
     ]
   editor:
-    fontSize: 17
+    fontSize: 19
     invisibles: {}
     softWrap: true
     softWrapHangingIndent: 1
@@ -27,6 +34,10 @@
   latexer: {}
   "one-dark-ui": {}
   "open-terminal-here": {}
+  pigments:
+    ignoredBufferNames: [
+      "*.asm"
+    ]
   "run-command2": {}
   "terminal-panel": {}
   welcome:
@@ -34,6 +45,7 @@
 ".bat.source":
   editor:
     softWrapHangingIndent: 1
+    tabLength: 4
 ".beamer.latex.tex.text":
   editor:
     softWrapHangingIndent: 1
@@ -49,6 +61,10 @@
 ".latex.tex.text":
   editor:
     softWrapHangingIndent: 1
+".mips.source":
+  editor:
+    softWrapHangingIndent: 1
+    tabLength: 4
 ".tex.text":
   editor:
     softWrapHangingIndent: 1

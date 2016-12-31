@@ -1,30 +1,42 @@
-path = require 'path'
-Color = require './color'
-ColorParser = null
-ColorExpression = require './color-expression'
-SVGColors = require './svg-colors'
-BlendModes = require './blend-modes'
-{split, clamp, clampInt} = require './utils'
-{
-  int
-  float
-  percent
-  optionalPercent
-  intOrPercent
-  floatOrPercent
-  comma
-  notQuote
-  hexadecimal
-  ps
-  pe
-  variables
-  namePrefixes
-} = require './regexes'
+[
+  Color, ColorParser, ColorExpression, SVGColors, BlendModes,
+  int, float, percent, optionalPercent, intOrPercent, floatOrPercent, comma,
+  notQuote, hexadecimal, ps, pe, variables, namePrefixes,
+  split, clamp, clampInt, scopeFromFileName
+] = []
 
 module.exports =
 class ColorContext
   constructor: (options={}) ->
-    {variables, colorVariables, @referenceVariable, @referencePath, @rootPaths, @parser, @colorVars, @vars, @defaultVars, @defaultColorVars, sorted, @registry} = options
+    unless Color?
+      Color = require './color'
+      SVGColors = require './svg-colors'
+      BlendModes = require './blend-modes'
+      ColorExpression ?= require './color-expression'
+
+      {
+        int, float, percent, optionalPercent, intOrPercent, floatOrPercent
+        comma, notQuote, hexadecimal, ps, pe, variables, namePrefixes
+      } = require './regexes'
+
+      ColorContext::SVGColors = SVGColors
+      ColorContext::Color = Color
+      ColorContext::BlendModes = BlendModes
+      ColorContext::int = int
+      ColorContext::float = float
+      ColorContext::percent = percent
+      ColorContext::optionalPercent = optionalPercent
+      ColorContext::intOrPercent = intOrPercent
+      ColorContext::floatOrPercent = floatOrPercent
+      ColorContext::comma = comma
+      ColorContext::notQuote = notQuote
+      ColorContext::hexadecimal = hexadecimal
+      ColorContext::ps = ps
+      ColorContext::pe = pe
+      ColorContext::variablesRE = variables
+      ColorContext::namePrefixes = namePrefixes
+
+    {variables, colorVariables, @referenceVariable, @referencePath, @rootPaths, @parser, @colorVars, @vars, @defaultVars, @defaultColorVars, sorted, @registry, @sassScopeSuffix} = options
 
     variables ?= []
     colorVariables ?= []
@@ -45,22 +57,23 @@ class ColorContext
       @defaultColorVars = {}
 
       for v in @variables
-        @vars[v.name] = v
-        @defaultVars[v.name] = v if v.path.match /\/.pigments$/
+        @vars[v.name] = v unless v.default
+        @defaultVars[v.name] = v if v.default
 
       for v in @colorVariables
-        @colorVars[v.name] = v
-        @defaultColorVars[v.name] = v if v.path.match /\/.pigments$/
+        @colorVars[v.name] = v unless v.default
+        @defaultColorVars[v.name] = v if v.default
 
     if not @registry.getExpression('pigments:variables')? and @colorVariables.length > 0
       expr = ColorExpression.colorExpressionForColorVariables(@colorVariables)
       @registry.addExpression(expr)
 
     unless @parser?
-      ColorParser = require './color-parser'
+      ColorParser ?= require './color-parser'
       @parser = new ColorParser(@registry, this)
 
     @usedVariables = []
+    @resolvedVariables = []
 
   sortPaths: (a,b) =>
     if @referencePath?
@@ -120,6 +133,7 @@ class ColorContext
     usedVariables = []
     usedVariables.push v for v in @usedVariables when v not in usedVariables
     @usedVariables = []
+    @resolvedVariables = []
     usedVariables
 
   ##    ##     ##    ###    ##       ##     ## ########  ######
@@ -145,18 +159,21 @@ class ColorContext
     if @colorVars[value]?
       @usedVariables.push(value)
       @colorVars[value].value
+    else if @defaultColorVars[value]?
+      @usedVariables.push(value)
+      @defaultColorVars[value].value
     else
       value
 
   readColor: (value, keepAllVariables=false) ->
-    return if value in @usedVariables
+    return if value in @usedVariables and not (value in @resolvedVariables)
 
     realValue = @readColorExpression(value)
 
     return if not realValue? or realValue in @usedVariables
 
     scope = if @colorVars[value]?
-      path.extname(@colorVars[value].path)[1..-1]
+      @scopeFromFileName(@colorVars[value].path)
     else
       '*'
 
@@ -175,10 +192,22 @@ class ColorContext
     else
       @usedVariables.push(value) if @vars[value]?
 
-    if result? and (keepAllVariables or value not in @usedVariables)
-      result.variables = (result.variables ? []).concat(@readUsedVariables())
+    if result?
+      @resolvedVariables.push(value)
+      if keepAllVariables or value not in @usedVariables
+        result.variables = (result.variables ? []).concat(@readUsedVariables())
 
     return result
+
+  scopeFromFileName: (path) ->
+    scopeFromFileName ?= require './scope-from-file-name'
+
+    scope = scopeFromFileName(path)
+
+    if scope is 'sass' or scope is 'scss'
+      scope = [scope, @sassScopeSuffix].join(':')
+
+    scope
 
   readFloat: (value) ->
     res = parseFloat(value)
@@ -265,19 +294,19 @@ class ColorContext
   ##    ##     ##    ##     ##  ##       ##    ##
   ##     #######     ##    #### ########  ######
 
-  SVGColors: SVGColors
+  split: (value) ->
+    {split, clamp, clampInt} = require './utils' unless split?
+    split(value)
 
-  Color: Color
+  clamp: (value) ->
+    {split, clamp, clampInt} = require './utils' unless clamp?
+    clamp(value)
 
-  BlendModes: BlendModes
+  clampInt: (value) ->
+    {split, clamp, clampInt} = require './utils' unless clampInt?
+    clampInt(value)
 
-  split: (value) -> split(value)
-
-  clamp: (value) -> clamp(value)
-
-  clampInt: (value) -> clampInt(value)
-
-  isInvalid: (color) -> not color?.isValid()
+  isInvalid: (color) -> not Color.isValid(color)
 
   readParam: (param, block) ->
     re = ///\$(\w+):\s*((-?#{@float})|#{@variablesRE})///
@@ -295,6 +324,8 @@ class ColorContext
       light
 
   mixColors: (color1, color2, amount=0.5, round=Math.floor) ->
+    return new Color(NaN, NaN, NaN, NaN) unless color1? and color2? and not isNaN(amount)
+
     inverse = 1 - amount
     color = new Color
 
@@ -314,29 +345,3 @@ class ColorContext
   ##    ##   ##   ##       ##    ##  ##         ## ##   ##
   ##    ##    ##  ##       ##    ##  ##        ##   ##  ##
   ##    ##     ## ########  ######   ######## ##     ## ##
-
-  int: int
-
-  float: float
-
-  percent: percent
-
-  optionalPercent: optionalPercent
-
-  intOrPercent: intOrPercent
-
-  floatOrPercent: floatOrPercent
-
-  comma: comma
-
-  notQuote: notQuote
-
-  hexadecimal: hexadecimal
-
-  ps: ps
-
-  pe: pe
-
-  variablesRE: variables
-
-  namePrefixes: namePrefixes

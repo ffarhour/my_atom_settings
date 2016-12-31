@@ -1,8 +1,8 @@
-'use babel'
+/** @babel */
 
 import fs from 'fs-plus'
 import _ from 'lodash'
-import {heredoc} from './werkzeug'
+import { heredoc } from './werkzeug'
 
 function defineDefaultProperty (target, property) {
   const shadowProperty = `__${property}`
@@ -24,15 +24,12 @@ export default class Latex {
   constructor () {
     this.createLogProxy()
 
-    defineDefaultProperty(this, 'builder')
     defineDefaultProperty(this, 'logger')
     defineDefaultProperty(this, 'opener')
 
     this.observeOpenerConfig()
-    this.observeBuilderConfig()
   }
 
-  getBuilder () { return this.builder }
   getLogger () { return this.logger }
   getOpener () { return this.opener }
 
@@ -40,19 +37,35 @@ export default class Latex {
     this.logger = logger
   }
 
-  getDefaultBuilder () {
-    let BuilderClass = null
-    if (this.useLatexmk()) {
-      BuilderClass = require('./builders/latexmk')
-    } else {
-      BuilderClass = require('./builders/texify')
+  attachStatusBar (statusBar) {
+    const StatusIndicator = require('./views/status-indicator')
+    this.statusIndicator = new StatusIndicator({ type: 'idle' })
+    this.statusTile = statusBar.addRightTile({
+      item: this.statusIndicator,
+      priority: 9001
+    })
+  }
+
+  detachStatusBar () {
+    if (this.statusTile) {
+      this.statusTile.destroy()
+      this.statusTile = null
     }
-    return new BuilderClass()
+    if (this.statusIndicator) {
+      this.statusIndicator.destroy()
+      this.statusIndicator = null
+    }
+  }
+
+  setStatus (text, type, icon, spin, onClick) {
+    if (this.statusIndicator) {
+      this.statusIndicator.update({ text, type, icon, spin, onClick })
+    }
   }
 
   getDefaultLogger () {
-    const ConsoleLogger = require('./loggers/console-logger')
-    return new ConsoleLogger()
+    const DefaultLogger = require('./loggers/default-logger')
+    return new DefaultLogger()
   }
 
   getDefaultOpener () {
@@ -80,6 +93,27 @@ export default class Latex {
       },
       info: (message) => {
         this.logger.info(message)
+      },
+      showMessage: (message) => {
+        this.logger.showMessage(message)
+      },
+      group: (label) => {
+        this.logger.group(label)
+      },
+      groupEnd: () => {
+        this.logger.groupEnd()
+      },
+      sync: () => {
+        this.logger.sync()
+      },
+      toggle: () => {
+        this.logger.toggle()
+      },
+      show: () => {
+        this.logger.show()
+      },
+      hide: () => {
+        this.logger.hide()
       }
     }
   }
@@ -90,11 +124,6 @@ export default class Latex {
     atom.config.onDidChange('latex.skimPath', callback)
     atom.config.onDidChange('latex.sumatraPath', callback)
     atom.config.onDidChange('latex.okularPath', callback)
-  }
-
-  observeBuilderConfig () {
-    const callback = () => { this['__builder'] = this.getDefaultBuilder() }
-    atom.config.onDidChange('latex.builder', callback)
   }
 
   resolveOpenerImplementation (platform) {
@@ -125,6 +154,12 @@ export default class Latex {
         if (this.okularExecutableExists()) {
           return require('./openers/okular-opener')
         }
+
+        if (this.evinceExecutableExists()) {
+          return require('./openers/evince-opener')
+        }
+
+        return require('./openers/xdg-opener')
     }
 
     if (this.hasPdfViewerPackage()) {
@@ -154,11 +189,11 @@ export default class Latex {
     return fs.existsSync(atom.config.get('latex.okularPath'))
   }
 
-  viewerExecutableExists () {
-    return fs.existsSync(atom.config.get('latex.viewerPath'))
+  evinceExecutableExists () {
+    return fs.existsSync(atom.config.get('latex.evincePath'))
   }
 
-  useLatexmk () {
-    return atom.config.get('latex.builder') === 'latexmk'
+  viewerExecutableExists () {
+    return fs.existsSync(atom.config.get('latex.viewerPath'))
   }
 }

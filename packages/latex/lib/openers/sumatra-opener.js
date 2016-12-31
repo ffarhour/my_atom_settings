@@ -1,10 +1,9 @@
-'use babel'
+/** @babel */
 
-import child_process from 'child_process'
 import Opener from '../opener'
 
 export default class SumatraOpener extends Opener {
-  open (filePath, texPath, lineNumber, callback) {
+  async open (filePath, texPath, lineNumber) {
     const sumatraPath = `"${atom.config.get('latex.sumatraPath')}"`
     const atomPath = `"${process.argv[0]}"`
     const args = [
@@ -14,16 +13,12 @@ export default class SumatraOpener extends Opener {
       `"${lineNumber}"`,
       `"${filePath}"`,
       '-inverse-search',
-      ['\"\\\"', `${atomPath}`, '\\\"'].join(''),
-      '\\\"%f:%l\\\"'
+      ['"\\"', `${atomPath}`, '\\"'].join(''),
+      '\\"%f:%l\\"'
     ]
 
     const command = `${sumatraPath} ${args.join(' ')}`
 
-    child_process.exec(command, (error) => {
-      if (callback) {
-        callback((error) ? error.code : 0)
-      }
-    })
+    return this.executeChildProcess(command)
   }
 }

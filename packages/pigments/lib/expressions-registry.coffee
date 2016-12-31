@@ -1,24 +1,27 @@
-{Emitter} = require 'atom'
-ColorExpression = require './color-expression'
-vm = require 'vm'
+[Emitter, vm] = []
 
 module.exports =
 class ExpressionsRegistry
   @deserialize: (serializedData, expressionsType) ->
+    vm ?= require 'vm'
+
     registry = new ExpressionsRegistry(expressionsType)
 
     for name, data of serializedData.expressions
       handle = vm.runInNewContext(data.handle.replace('function', "handle = function"), {console, require})
       registry.createExpression(name, data.regexpString, data.priority, data.scopes, handle)
 
-    registry.regexpString = serializedData.regexpString
+    registry.regexpStrings['none'] = serializedData.regexpString
 
     registry
 
   # The {Object} where color expression handlers are stored
   constructor: (@expressionsType) ->
+    Emitter ?= require('event-kit').Emitter
+
     @colorExpressions = {}
     @emitter = new Emitter
+    @regexpStrings = {}
 
   dispose: ->
     @emitter.dispose()
@@ -40,16 +43,23 @@ class ExpressionsRegistry
 
     return expressions if scope is '*'
 
-    expressions.filter (e) -> '*' in e.scopes or scope in e.scopes
+    matchScope = (a) -> (b) ->
+      [aa, ab] = a.split(':')
+      [ba, bb] = b.split(':')
+
+      aa is ba and (not ab? or not bb? or ab is bb)
+
+    expressions.filter (e) ->
+      '*' in e.scopes or e.scopes.some(matchScope(scope))
 
   getExpression: (name) -> @colorExpressions[name]
 
   getRegExp: ->
-    @regexpString ?= @getExpressions().map((e) ->
+    @regexpStrings['none'] ?= @getExpressions().map((e) ->
       "(#{e.regexpString})").join('|')
 
   getRegExpForScope: (scope) ->
-    @regexpString ?= @getExpressionsForScope(scope).map((e) ->
+    @regexpStrings[scope] ?= @getExpressionsForScope(scope).map((e) ->
       "(#{e.regexpString})").join('|')
 
   createExpression: (name, regexpString, priority=0, scopes=['*'], handle) ->
@@ -62,11 +72,13 @@ class ExpressionsRegistry
       scopes = priority
       priority = 0
 
+    scopes.push('pigments') unless scopes.length is 1 and scopes[0] is '*'
+
     newExpression = new @expressionsType({name, regexpString, scopes, priority, handle})
     @addExpression newExpression
 
   addExpression: (expression, batch=false) ->
-    delete @regexpString
+    @regexpStrings = {}
     @colorExpressions[expression.name] = expression
 
     unless batch
@@ -89,8 +101,8 @@ class ExpressionsRegistry
     @emitter.emit 'did-update-expressions', {registry: this}
 
   removeExpression: (name) ->
-    delete @regexpString
     delete @colorExpressions[name]
+    @regexpStrings = {}
     @emitter.emit 'did-remove-expression', {name, registry: this}
     @emitter.emit 'did-update-expressions', {name, registry: this}
 

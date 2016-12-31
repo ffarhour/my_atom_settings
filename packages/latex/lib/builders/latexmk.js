@@ -1,59 +1,89 @@
-'use babel'
+/** @babel */
 
-import child_process from 'child_process'
+import childProcess from 'child_process'
 import path from 'path'
 import Builder from '../builder'
 
+const LATEX_PATTERN = /^latex|u?platex$/
+
 export default class LatexmkBuilder extends Builder {
-  constructor () {
-    super()
-    this.executable = 'latexmk'
+  executable = 'latexmk'
+
+  static canProcess (filePath) {
+    return path.extname(filePath) === '.tex'
   }
 
-  run (filePath) {
-    const args = this.constructArgs(filePath)
+  run (filePath, jobname, shouldRebuild) {
+    const args = this.constructArgs(filePath, jobname, shouldRebuild)
     const command = `${this.executable} ${args.join(' ')}`
-    const options = this.constructChildProcessOptions()
+    const options = this.constructChildProcessOptions(filePath)
 
-    options.cwd = path.dirname(filePath) // Run process with sensible CWD.
-    options.maxBuffer = 52428800 // Set process' max buffer size to 50 MB.
     options.env.max_print_line = 1000 // Max log file line length.
 
     return new Promise((resolve) => {
       // TODO: Add support for killing the process.
-      child_process.exec(command, options, (error) => {
+      childProcess.exec(command, options, (error) => {
         resolve((error) ? error.code : 0)
       })
     })
   }
 
-  constructArgs (filePath) {
-    const outputFormat = atom.config.get('latex.outputFormat') || 'pdf'
+  logStatusCode (statusCode) {
+    switch (statusCode) {
+      case 10:
+        latex.log.error('latexmk: Bad command line arguments.')
+        break
+      case 11:
+        latex.log.error('latexmk: File specified on command line not found or other file not found.')
+        break
+      case 12:
+        latex.log.error('latexmk: Failure in some part of making files.')
+        break
+      case 13:
+        latex.log.error('latexmk: error in initialization file.')
+        break
+      case 20:
+        latex.log.error('latexmk: probable bug or retcode from called program.')
+        break
+      default:
+        super.logStatusCode(statusCode)
+    }
+  }
 
+  constructArgs (filePath, jobname, shouldRebuild) {
     const args = [
       '-interaction=nonstopmode',
       '-f',
       '-cd',
-      `-${outputFormat}`,
-      '-synctex=1',
       '-file-line-error'
     ]
 
+    const outputFormat = this.getOutputFormat(filePath)
     const enableShellEscape = atom.config.get('latex.enableShellEscape')
-    const engineFromMagic = this.getLatexEngineFromMagic(filePath)
-    const customEngine = atom.config.get('latex.customEngine')
-    const engine = atom.config.get('latex.engine')
+    const enableSynctex = atom.config.get('latex.enableSynctex') !== false
+    const engine = this.getLatexEngine(filePath)
 
+    if (shouldRebuild) {
+      args.push('-g')
+    }
+    if (jobname) {
+      args.push(`-jobname=${jobname}`)
+    }
     if (enableShellEscape) {
       args.push('-shell-escape')
     }
+    if (enableSynctex) {
+      args.push('-synctex=1')
+    }
 
-    if (engineFromMagic) {
-      args.push(`-pdflatex="${engineFromMagic}"`)
-    } else if (customEngine) {
-      args.push(`-pdflatex="${customEngine}"`)
-    } else if (engine && engine !== 'pdflatex') {
-      args.push(`-${engine}`)
+    if (engine.match(LATEX_PATTERN)) {
+      args.push(`-latex="${engine}"`)
+      args.push(outputFormat === 'pdf'
+        ? this.constructPdfProducerArgs(filePath)
+        : `-${outputFormat}`)
+    } else {
+      args.push(`-pdflatex="${engine}"`)
+      args.push(`-${outputFormat}`)
     }
 
     let outdir = this.getOutputDirectory(filePath)
@@ -63,5 +93,18 @@ export default class LatexmkBuilder extends Builder {
 
     args.push(`"${filePath}"`)
     return args
+  }
+
+  constructPdfProducerArgs (filePath) {
+    const producer = this.getProducer(filePath)
+
+    switch (producer) {
+      case 'ps2pdf':
+        return '-pdfps'
+      case 'dvipdf':
+        return '-pdfdvi -e "\\$dvipdf = \'dvipdf %O %S %D\';"'
+      default:
+        return `-pdfdvi -e "\\$dvipdf = \'${producer} %O -o %D %S\';"`
+    }
   }
 }

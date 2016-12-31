@@ -1,48 +1,52 @@
-'use babel'
+/** @babel */
 
-import child_process from 'child_process'
+import childProcess from 'child_process'
 import path from 'path'
 import Builder from '../builder'
 
 export default class TexifyBuilder extends Builder {
-  constructor () {
-    super()
-    this.executable = 'texify'
+  executable = 'texify'
+
+  static canProcess (filePath) {
+    return path.extname(filePath) === '.tex'
   }
 
-  run (filePath) {
-    const args = this.constructArgs(filePath)
+  run (filePath, jobname) {
+    const args = this.constructArgs(filePath, jobname)
     const command = `${this.executable} ${args.join(' ')}`
-    const options = this.constructChildProcessOptions()
-
-    options.cwd = path.dirname(filePath) // Run process with sensible CWD.
-    options.maxBuffer = 52428800 // Set process' max buffer size to 50 MB.
+    const options = this.constructChildProcessOptions(filePath, { BIBTEX: 'biber' })
 
     return new Promise((resolve) => {
       // TODO: Add support for killing the process.
-      child_process.exec(command, options, (error) => {
+      childProcess.exec(command, options, (error) => {
         resolve((error) ? error.code : 0)
       })
     })
   }
 
-  constructArgs (filePath) {
+  constructArgs (filePath, jobname) {
     const args = [
       '--batch',
       '--pdf',
-      '--tex-option="--synctex=1"',
       '--tex-option="--interaction=nonstopmode"',
       // Set logfile max line length.
       '--tex-option="--max-print-line=1000"'
     ]
 
     const enableShellEscape = atom.config.get('latex.enableShellEscape')
+    const enableSynctex = atom.config.get('latex.enableSynctex') !== false
     const engineFromMagic = this.getLatexEngineFromMagic(filePath)
     const customEngine = atom.config.get('latex.customEngine')
     const engine = atom.config.get('latex.engine')
 
+    if (jobname) {
+      args.push(`--tex-option="--job-name=${jobname}"`)
+    }
     if (enableShellEscape) {
       args.push('--tex-option=--enable-write18')
+    }
+    if (enableSynctex) {
+      args.push('--tex-option="--synctex=1"')
     }
 
     if (engineFromMagic) {

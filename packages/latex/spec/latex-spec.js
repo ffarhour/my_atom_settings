@@ -1,8 +1,8 @@
-'use babel'
+/** @babel */
 
 import './spec-helpers'
 import Latex from '../lib/latex'
-import {NullOpener} from './stubs'
+import { NullOpener } from './stubs'
 
 describe('Latex', () => {
   let latex, globalLatex
@@ -21,31 +21,16 @@ describe('Latex', () => {
     it('initializes all properties', () => {
       spyOn(latex, 'resolveOpenerImplementation').andReturn(NullOpener)
 
-      expect(latex.builder).toBeDefined()
       expect(latex.logger).toBeDefined()
       expect(latex.opener).toBeDefined()
     })
   })
 
-  describe('getDefaultBuilder', () => {
-    it('returns an instance of LatexmkBuilder by default', () => {
-      spyOn(latex, 'useLatexmk').andReturn(true)
-      const defaultBuilder = latex.getDefaultBuilder()
-      expect(defaultBuilder.constructor.name).toBe('LatexmkBuilder')
-    })
-
-    it('returns an instance of TexifyBuilder when chosen', () => {
-      spyOn(latex, 'useLatexmk').andReturn(false)
-      const defaultBuilder = latex.getDefaultBuilder()
-      expect(defaultBuilder.constructor.name).toBe('TexifyBuilder')
-    })
-  })
-
   describe('getDefaultLogger', () => {
-    it('returns an instance of ConsoleLogger', () => {
+    it('returns an instance of DefaultLogger', () => {
       const defaultLogger = latex.getDefaultLogger()
 
-      expect(defaultLogger.constructor.name).toBe('ConsoleLogger')
+      expect(defaultLogger.constructor.name).toBe('DefaultLogger')
     })
   })
 
@@ -92,14 +77,14 @@ describe('Latex', () => {
   })
 
   describe('resolveOpenerImplementation', () => {
-    it('returns SkimOpener when installed, and running on OS X', () => {
+    it('returns SkimOpener when installed, and running on macOS', () => {
       spyOn(latex, 'skimExecutableExists').andReturn(true)
       const opener = latex.resolveOpenerImplementation('darwin')
 
       expect(opener.name).toBe('SkimOpener')
     })
 
-    it('returns PreviewOpener when Skim is not installed, and running on OS X', () => {
+    it('returns PreviewOpener when Skim is not installed, and running on macOS', () => {
       spyOn(latex, 'skimExecutableExists').andReturn(false)
       const opener = latex.resolveOpenerImplementation('darwin')
 
@@ -148,11 +133,28 @@ describe('Latex', () => {
       expect(opener.name).toBe('SkimOpener')
     })
 
-    it('does not support GNU/Linux', () => {
-      spyOn(latex, 'hasPdfViewerPackage').andReturn(false)
+    it('returns OkularOpener when when installed and running on Linux', () => {
+      spyOn(latex, 'okularExecutableExists').andReturn(true)
+      spyOn(latex, 'evinceExecutableExists').andReturn(false)
       const opener = latex.resolveOpenerImplementation('linux')
 
-      expect(opener).toBeNull()
+      expect(opener.name).toBe('OkularOpener')
+    })
+
+    it('returns EvinceOpener when installed and running on Linux', () => {
+      spyOn(latex, 'okularExecutableExists').andReturn(false)
+      spyOn(latex, 'evinceExecutableExists').andReturn(true)
+      const opener = latex.resolveOpenerImplementation('linux')
+
+      expect(opener.name).toBe('EvinceOpener')
+    })
+
+    it('returns XdgOPener when Okular or Evince are not installed, and running on Linux', () => {
+      spyOn(latex, 'okularExecutableExists').andReturn(false)
+      spyOn(latex, 'evinceExecutableExists').andReturn(false)
+      const opener = latex.resolveOpenerImplementation('linux')
+
+      expect(opener.name).toBe('XdgOpener')
     })
 
     it('does not support unknown operating systems without pdf-view package', () => {

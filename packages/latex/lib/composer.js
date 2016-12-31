@@ -1,28 +1,27 @@
-'use babel'
+/** @babel */
 
-import _ from 'lodash'
+import { shell } from 'electron'
 import fs from 'fs-plus'
 import path from 'path'
-import {heredoc} from './werkzeug'
+import BuilderRegistry from './builder-registry'
+import { getEditorDetails, heredoc } from './werkzeug'
 
 export default class Composer {
-  destroy () {
-    this.destroyProgressIndicator()
-    this.destroyErrorIndicator()
-    this.destroyErrorMarkers()
+  constructor () {
+    this.builderRegistry = new BuilderRegistry()
+    this.configChange = atom.config.onDidChange('latex', () => {
+      this.rebuildCompleted = new Set()
+    })
   }
 
-  async build () {
-    const {editor, filePath} = this.getEditorDetails()
+  destroy () {
+  }
+
+  async build (shouldRebuild) {
+    const { editor, filePath } = getEditorDetails()
 
     if (!filePath) {
       latex.log.warning('File needs to be saved to disk before it can be TeXified.')
-      return Promise.reject(false)
-    }
-
-    if (!this.isTexFile(filePath)) {
-      latex.log.warning(heredoc(`File does not seem to be a TeX file
-        unsupported extension '${path.extname(filePath)}'.`))
       return Promise.reject(false)
     }
 
@@ -30,46 +29,79 @@ export default class Composer {
       editor.save() // TODO: Make this configurable?
     }
 
-    const builder = latex.getBuilder()
-    const rootFilePath = this.resolveRootFilePath(filePath)
+    const builder = this.getBuilder(filePath)
+    if (builder == null) {
+      latex.log.warning(`No registered LaTeX builder can process ${filePath}.`)
+      return Promise.reject(false)
+    } else if (Object.getPrototypeOf(builder).constructor.name === 'TexifyBuilder') {
+      // -------------------------------------------------------------
+      // TODO: Remove this whole block when texify support is removed.
+      // -------------------------------------------------------------
+      const message = `LaTeX: The texify builder has been deprecated`
+      const description = heredoc(`
+        Support for the \`texify\` builder has been deprecated in favor of \`latexmk\`, and will be
+        removed soon.`)
 
-    this.destroyErrorMarkers()
-    this.destroyErrorIndicator()
-    this.showProgressIndicator()
+      const title = 'How to use latexmk with MiKTeX'
+      const url = 'https://github.com/thomasjo/atom-latex/wiki/Using-latexmk-with-MiKTeX'
+      const openUrl = (event) => {
+        // NOTE: Horrible hack due to a bug in atom/notifications module...
+        const element = event.target.parentElement.parentElement.parentElement.parentElement
+        const notification = element.getModel()
+        notification.dismiss()
 
-    return new Promise(async (resolve, reject) => {
-      let statusCode, result
-
-      const showBuildError = () => {
-        this.showError(statusCode, result, builder)
-        reject(statusCode)
+        shell.openExternal(url)
       }
 
-      try {
-        statusCode = await builder.run(rootFilePath)
-        result = builder.parseLogFile(rootFilePath)
-        if (statusCode > 0 || !result || !result.outputFilePath) {
-          showBuildError(statusCode, result, builder)
-          return
-        }
+      atom.notifications.addWarning(message, {
+        dismissable: true, description, buttons: [{ text: title, onDidClick: openUrl }]
+      })
+    }
 
+    latex.setStatus('LaTeX Build', 'highlight', 'sync', true)
+
+    latex.log.group('LaTeX Build')
+    const rootFilePath = this.resolveRootFilePath(filePath)
+    const jobnames = builder.getJobNamesFromMagic(rootFilePath)
+
+    if (this.rebuildCompleted && !this.rebuildCompleted.has(rootFilePath)) {
+      shouldRebuild = true
+      this.rebuildCompleted.add(rootFilePath)
+    }
+
+    const jobs = jobnames.map(jobname => this.buildJob(builder, rootFilePath, jobname, shouldRebuild))
+
+    await Promise.all(jobs)
+
+    latex.log.groupEnd()
+  }
+
+  async buildJob (builder, rootFilePath, jobname, shouldRebuild) {
+    try {
+      const statusCode = await builder.run(rootFilePath, jobname, shouldRebuild)
+      const result = builder.parseLogAndFdbFiles(rootFilePath, jobname)
+
+      if (result) {
+        for (const message of result.messages) {
+          latex.log.showMessage(message)
+        }
+      }
+
+      if (statusCode > 0 || !result || !result.outputFilePath) {
+        this.showError(statusCode, result, builder)
+      } else {
         if (this.shouldMoveResult()) {
           this.moveResult(result, rootFilePath)
         }
-
         this.showResult(result)
-        resolve(statusCode)
-      } catch (error) {
-        console.error(error.message)
-        reject(error.message)
-      } finally {
-        this.destroyProgressIndicator()
       }
-    })
+    } catch (error) {
+      latex.log.error(error.message)
+    }
   }
 
   sync () {
-    const {filePath, lineNumber} = this.getEditorDetails()
+    const { filePath, lineNumber } = getEditorDetails()
     if (!filePath || !this.isTexFile(filePath)) {
       return
     }
@@ -87,7 +119,7 @@ export default class Composer {
   }
 
   async clean () {
-    const {filePath} = this.getEditorDetails()
+    const { filePath } = getEditorDetails()
     if (!filePath || !this.isTexFile(filePath)) {
       return Promise.reject()
     }
@@ -104,14 +136,14 @@ export default class Composer {
     rootFile = rootFile.substring(0, rootFile.lastIndexOf('.'))
 
     const cleanExtensions = atom.config.get('latex.cleanExtensions')
-    return await* cleanExtensions.map(async (extension) => {
+    return Promise.all(cleanExtensions.map(async (extension) => {
       const candidatePath = path.join(rootPath, rootFile + extension)
       return new Promise(async (resolve) => {
         fs.remove(candidatePath, (error) => {
-          resolve({filePath: candidatePath, error: error})
+          return resolve({filePath: candidatePath, error: error})
         })
       })
-    })
+    }))
   }
 
   setStatusBar (statusBar) {
@@ -150,8 +182,13 @@ export default class Composer {
     if (!outputFilePath) {
       rootFilePath = this.resolveRootFilePath(filePath)
 
-      const builder = latex.getBuilder()
-      const result = builder.parseLogFile(rootFilePath)
+      const builder = this.getBuilder(rootFilePath)
+      if (builder == null) {
+        latex.log.warning(`No registered LaTeX builder can process ${rootFilePath}.`)
+        return null
+      }
+
+      const result = builder.parseLogAndFdbFiles(rootFilePath)
       if (!result || !result.outputFilePath) {
         latex.log.warning('Log file parsing failed!')
         return null
@@ -159,6 +196,7 @@ export default class Composer {
 
       this.outputLookup = this.outputLookup || {}
       this.outputLookup[filePath] = result.outputFilePath
+      outputFilePath = result.outputFilePath
     }
 
     if (this.shouldMoveResult()) {
@@ -168,87 +206,18 @@ export default class Composer {
     return outputFilePath
   }
 
-  showResult (result) {
+  async showResult (result) {
     if (!this.shouldOpenResult()) { return }
 
     const opener = latex.getOpener()
     if (opener) {
-      const {filePath, lineNumber} = this.getEditorDetails()
-      opener.open(result.outputFilePath, filePath, lineNumber)
+      const { filePath, lineNumber } = getEditorDetails()
+      await opener.open(result.outputFilePath, filePath, lineNumber)
     }
   }
 
   showError (statusCode, result, builder) {
-    this.showErrorIndicator(result)
-    this.showErrorMarkers(result)
-    latex.log.error(statusCode, result, builder)
-  }
-
-  showProgressIndicator () {
-    if (!this.statusBar) { return null }
-    if (this.indicator) { return this.indicator }
-
-    const ProgressIndicator = require('./status-bar/progress-indicator')
-    this.indicator = new ProgressIndicator()
-    this.statusBar.addRightTile({
-      item: this.indicator,
-      priority: 9001
-    })
-  }
-
-  showErrorIndicator (result) {
-    if (!this.statusBar) { return null }
-    if (this.errorIndicator) { return this.errorIndicator }
-
-    const ErrorIndicator = require('./status-bar/error-indicator')
-    this.errorIndicator = new ErrorIndicator(result)
-    this.statusBar.addRightTile({
-      item: this.errorIndicator,
-      priority: 9001
-    })
-  }
-  showErrorMarkers (result) {
-    if (this.errorMarkers && this.errorMarkers.length > 0) { this.destroyErrorMarkers() }
-    const editors = this.getAllEditors()
-    this.errorMarkers = []
-    const ErrorMarker = require('./error-marker')
-    for (let editor of editors) {
-      if (editor.getPath()) {
-        let errors = _.filter(result.errors, error => {
-          return editor.getPath().includes(error.filePath)
-        })
-        let warnings = _.filter(result.warnings, warning => {
-          return editor.getPath().includes(warning.filePath)
-        })
-        if (errors.length || warnings.length) {
-          this.errorMarkers.push(new ErrorMarker(editor, errors, warnings))
-        }
-      }
-    }
-  }
-
-  destroyProgressIndicator () {
-    if (this.indicator) {
-      this.indicator.element.remove()
-      this.indicator = null
-    }
-  }
-
-  destroyErrorIndicator () {
-    if (this.errorIndicator) {
-      this.errorIndicator.element.remove()
-      this.errorIndicator = null
-    }
-  }
-
-  destroyErrorMarkers () {
-    if (this.errorMarkers) {
-      for (let errorMarker of this.errorMarkers) {
-        errorMarker.clear()
-        errorMarker = null
-      }
-      this.errorMarkers = []
-    }
+    builder.logStatusCode(statusCode)
   }
 
   isTexFile (filePath) {
@@ -256,23 +225,9 @@ export default class Composer {
     return !filePath || filePath.search(/\.(tex|lhs)$/) > 0
   }
 
-  getEditorDetails () {
-    const editor = atom.workspace.getActiveTextEditor()
-    let filePath, lineNumber
-    if (editor) {
-      filePath = editor.getPath()
-      lineNumber = editor.getCursorBufferPosition().row + 1
-    }
-
-    return {
-      editor: editor,
-      filePath: filePath,
-      lineNumber: lineNumber
-    }
-  }
-
-  getAllEditors () {
-    return atom.workspace.getTextEditors()
+  getBuilder (filePath) {
+    const BuilderImpl = this.builderRegistry.getBuilder(filePath)
+    return (BuilderImpl != null) ? new BuilderImpl() : null
   }
 
   alterParentPath (targetPath, originalPath) {
