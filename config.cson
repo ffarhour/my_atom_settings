@@ -19,8 +19,8 @@
     ]
     telemetryConsent: "limited"
     themes: [
-      "one-light-ui"
-      "base16-tomorrow-dark-theme"
+      "seti-ui"
+      "seti-syntax"
     ]
   editor:
     fontSize: 19
@@ -39,6 +39,9 @@
       "*.asm"
     ]
   "run-command2": {}
+  "seti-syntax":
+    themeColor: "Steel"
+  "seti-ui": {}
   "terminal-panel": {}
   welcome:
     showOnStartup: false
