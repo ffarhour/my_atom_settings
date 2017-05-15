@@ -30,7 +30,8 @@
     tabLength: 4
   "exception-reporting":
     userId: "76224680-6b80-4465-1ef9-77cf1d775418"
-  latex: {}
+  latex:
+    buildOnSave: true
   latexer: {}
   "one-dark-ui": {}
   "open-terminal-here": {}
