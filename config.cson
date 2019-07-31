@@ -16,12 +16,14 @@
       "terminal-panel"
       "language-assembly"
       "autocomplete-java"
+      "python-tools"
     ]
     telemetryConsent: "limited"
     themes: [
       "seti-ui"
       "seti-syntax"
     ]
+    uriHandlerRegistration: "always"
   editor:
     fontSize: 19
     invisibles: {}
